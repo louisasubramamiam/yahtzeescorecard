@@ -81,8 +81,17 @@
     }
     @media (max-width: 600px) {
       table, th, td { font-size: 0.95em; }
-      .scorecard { padding: 8px 2vw; }
+      .scorecard { padding: 8px 2vw; max-width: 100vw; }
       h1 { font-size: 1.2em !important; }
+      th, td { padding: 7px 4px; }
+      table { width: 100vw; min-width: 0; }
+      .scorecard { border-radius: 8px; }
+      #scorecard-container { padding: 0 2vw; }
+      /* Make summary box fit better on mobile */
+      #summary-page { max-width: 98vw !important; min-width: 0 !important; padding: 18px 2vw !important; }
+      #summary-page table { width: 100% !important; min-width: 0 !important; max-width: 100vw !important; font-size: 0.98em; }
+      #summary-page h2, #summary-page h3 { font-size: 1em !important; }
+      #summary-page button { width: 100%; margin: 8px 0 0 0 !important; font-size: 1em; }
     }
     /* Confetti animation */
     @keyframes confetti-fall {

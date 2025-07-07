@@ -178,6 +178,10 @@
       html += '<tr><td><em>Total Score</em></td>';
       for (let j=0; j<players.length; ++j) html += `<td><input type="number" id="upperTotal-p${j}" disabled /></td>`;
       html += '</tr>';
+      // Add "the curve" row
+      html += '<tr><td><em>The Curve</em></td>';
+      for (let j=0; j<players.length; ++j) html += `<td id="theCurve-p${j}" style="text-align:center; font-weight:bold;"></td>`;
+      html += '</tr>';
       html += '<tr><td><em>Bonus</em></td>';
       for (let j=0; j<players.length; ++j) html += `<td><input type="text" id="bonusScore-p${j}" disabled /></td>`;
       html += '</tr>';
@@ -202,6 +206,10 @@
       // Grand Total
       html += '<tr><td><strong>Grand Total</strong></td>';
       for (let j=0; j<players.length; ++j) html += `<td><input type="number" id="grandTotal-p${j}" disabled style="font-weight:bold;" /></td>`;
+      html += '</tr>';
+      // Add Ranking row
+      html += '<tr><td><strong>Ranking</strong></td>';
+      for (let j=0; j<players.length; ++j) html += `<td id="ranking-p${j}" style="text-align:center; font-weight:bold;"></td>`;
       html += '</tr>';
       html += '</tbody></table>';
       container.innerHTML = html;
@@ -231,6 +239,7 @@
           sel.addEventListener('change', ()=>{
             if (sel.value === 'X') showBilgeNotification();
             updateUpperTotal(j);
+            updateCurve(j);
             checkEndGame();
           });
         }
@@ -253,7 +262,10 @@
         }
       }
       // Live cumulation: initialize Downstairs Total on build
-      for (let j=0; j<players.length; ++j) updateLowerTotal(j);
+      for (let j=0; j<players.length; ++j) {
+        updateLowerTotal(j);
+        updateCurve(j);
+      }
     }
     function updateUpperTotal(playerIdx) {
       // Ones to Sixes
@@ -276,7 +288,47 @@
       }
       // Upstairs Total
       document.getElementById(`upstairsTotal-p${playerIdx}`).value = allFilled ? (total + bonus) : '';
+      updateCurve(playerIdx);
       updateGrandTotal(playerIdx);
+    }
+    function updateCurve(playerIdx) {
+      // The curve targets for each upper section category
+      const curveTargets = [3, 6, 9, 12, 15, 18];
+      let sum = 0;
+      let curveSum = 0;
+      let filled = 0;
+      for (let i = 0; i < 6; ++i) {
+        const sel = document.querySelector(`select[name='${categories[i].name}-p${playerIdx}']`);
+        const val = sel.value;
+        if (val) {
+          // Treat 'X' as 0 for curve calculation
+          const num = (val === 'X') ? 0 : (parseInt(val) || 0);
+          sum += num;
+          curveSum += curveTargets[i];
+          filled++;
+        }
+      }
+      const cell = document.getElementById(`theCurve-p${playerIdx}`);
+      if (!cell) return;
+      if (filled === 0) {
+        cell.textContent = '';
+        cell.style.background = '';
+        cell.style.color = '';
+        return;
+      }
+      if (sum < curveSum) {
+        cell.textContent = 'Behind the curve';
+        cell.style.background = '#ffe5e5'; // pale red
+        cell.style.color = '#a94442';
+      } else if (sum === curveSum) {
+        cell.textContent = 'On the curve';
+        cell.style.background = '#f7f7f7'; // neutral
+        cell.style.color = '#333';
+      } else {
+        cell.textContent = 'Ahead of the curve';
+        cell.style.background = '#e5ffe5'; // pale green
+        cell.style.color = '#2e7d32';
+      }
     }
     function updateLowerTotal(playerIdx) {
       function getValue(catIdx) {
@@ -287,15 +339,68 @@
         return parseInt(val) || 0;
       }
       let lowerTotal = 0;
-      for (let i=6; i<categories.length; ++i) lowerTotal += getValue(i);
+      for (let i = 6; i < categories.length; ++i) lowerTotal += getValue(i);
       document.getElementById(`lowerTotal-p${playerIdx}`).value = lowerTotal;
       updateGrandTotal(playerIdx);
     }
     function updateGrandTotal(playerIdx) {
-      const upstairs = parseInt(document.getElementById(`upstairsTotal-p${playerIdx}`).value) || 0;
-      const downstairs = parseInt(document.getElementById(`lowerTotal-p${playerIdx}`).value) || 0;
-      const grand = upstairs + downstairs;
-      document.getElementById(`grandTotal-p${playerIdx}`).value = (upstairs || downstairs) ? grand : '';
+      // Calculate upper section (ones to sixes)
+      let upper = 0;
+      for (let i = 0; i < 6; ++i) {
+        const sel = document.querySelector(`select[name='${categories[i].name}-p${playerIdx}']`);
+        const val = sel && sel.value;
+        upper += (val === 'X') ? 0 : (parseInt(val) || 0);
+      }
+      // Add bonus if any
+      const bonus = parseInt(document.getElementById(`bonusScore-p${playerIdx}`).value) || 0;
+      // Calculate downstairs section (categories 6 and up)
+      let lower = 0;
+      for (let i = 6; i < categories.length; ++i) {
+        const sel = document.querySelector(`select[name='${categories[i].name}-p${playerIdx}']`);
+        const val = sel && sel.value;
+        lower += (val === 'X') ? 0 : (parseInt(val) || 0);
+      }
+      const grand = upper + bonus + lower;
+      // Show blank if nothing entered, else show total
+      document.getElementById(`grandTotal-p${playerIdx}`).value = (upper || bonus || lower) ? grand : '';
+      updateRanking();
+    }
+    function updateRanking() {
+      // Gather all grand totals
+      const scores = [];
+      for (let j = 0; j < players.length; ++j) {
+        const val = parseInt(document.getElementById(`grandTotal-p${j}`).value) || 0;
+        scores.push({ idx: j, score: val });
+      }
+      // Sort descending, keep track of original index
+      const sorted = [...scores].sort((a, b) => b.score - a.score);
+      // Assign ranks (handle ties)
+      let lastScore = null, lastRank = 0, skip = 0;
+      const ranks = Array(players.length);
+      for (let i = 0; i < sorted.length; ++i) {
+        if (sorted[i].score === lastScore) {
+          skip++;
+          ranks[sorted[i].idx] = ordinal(lastRank);
+        } else {
+          lastRank = i + 1;
+          ranks[sorted[i].idx] = ordinal(lastRank);
+          lastScore = sorted[i].score;
+          skip = 0;
+        }
+      }
+      // Update DOM
+      for (let j = 0; j < players.length; ++j) {
+        const cell = document.getElementById(`ranking-p${j}`);
+        if (cell) cell.textContent = (scores[j].score > 0) ? ranks[j] : '';
+      }
+      function ordinal(n) {
+        if (n === 11 || n === 12 || n === 13) return n + 'th';
+        const last = n % 10;
+        if (last === 1) return n + 'st';
+        if (last === 2) return n + 'nd';
+        if (last === 3) return n + 'rd';
+        return n + 'th';
+      }
     }
     function updatePlayerList() {
       const listDiv = document.getElementById('player-list');
@@ -526,4 +631,4 @@
     }
     </script>
 </body>
-</html>
+</body>

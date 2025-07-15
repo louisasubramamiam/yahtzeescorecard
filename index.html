@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Yahtzee Scorecard</title>
+  <style>
+    body {
+      font-family: Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif;
+      /* Removed casino theme background */
+      background: #e3f0fc;
+      margin: 0;
+      padding: 0;
+    }
+    .scorecard {
+      background: white;
+      padding: 32px 32px 24px 32px;
+      border-radius: 16px;
+      max-width: 700px;
+      margin: 40px auto;
+      box-shadow: 0 4px 24px rgba(30,60,120,0.10);
+      font-family: Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif;
+    }
+    table {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 32px auto;
+      width: 80vw;
+      max-width: 1100px;
+      min-width: 320px;
+      box-shadow: 0 2px 12px rgba(30,60,120,0.08);
+      font-family: Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif;
+    }
+    th, td {
+      padding: 10px 8px;
+      font-size: 1em;
+      font-family: Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif;
+    }
+    th {
+      background: #d0e6fa;
+      color: #1a355e;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    td {
+      background: #eaf4fd;
+    }
+    tr td:first-child {
+      background: #d0e6fa;
+      color: #1a355e;
+      font-weight: 600;
+    }
+    input, select, button {
+      font-family: Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif;
+      font-size: 1em;
+      border-radius: 6px;
+      border: 1px solid #b3c6e0;
+      padding: 6px 10px;
+      margin: 2px 0;
+    }
+    button {
+      background: #4a90e2;
+      color: white;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:disabled {
+      background: #b3c6e0;
+      color: #fff;
+      cursor: not-allowed;
+    }
+    button:hover:not(:disabled) {
+      background: #357ab8;
+    }
+    @media (max-width: 900px) {
+      table { width: 98vw; min-width: 0; }
+      .scorecard { max-width: 98vw; padding: 16px 4vw; }
+    }
+    @media (max-width: 600px) {
+      table, th, td { font-size: 0.95em; }
+      .scorecard { padding: 8px 2vw; max-width: 100vw; }
+      h1 { font-size: 1.2em !important; }
+      th, td { padding: 7px 4px; }
+      table { width: 100vw; min-width: 0; }
+      .scorecard { border-radius: 8px; }
+      #scorecard-container { padding: 0 2vw; }
+      /* Make summary box fit better on mobile */
+      #summary-page { max-width: 98vw !important; min-width: 0 !important; padding: 18px 2vw !important; }
+      #summary-page table { width: 100% !important; min-width: 0 !important; max-width: 100vw !important; font-size: 0.98em; }
+      #summary-page h2, #summary-page h3 { font-size: 1em !important; }
+      #summary-page button { width: 100%; margin: 8px 0 0 0 !important; font-size: 1em; }
+    }
+    /* Confetti animation */
+    @keyframes confetti-fall {
+      0% { transform: translateY(0) rotate(0); }
+      100% { transform: translateY(100vh) rotate(720deg); }
+    }
+    .confetti {
+      position: fixed;
+      top: -10px;
+      width: 10px;
+      height: 10px;
+      background: hsl(0, 100%, 50%);
+      opacity: 0.9;
+      animation: confetti-fall 1.5s infinite;
+    }
+    /* Fade transition utility */
+    .fade {
+      opacity: 1;
+      transition: opacity 0.5s;
+    }
+    .fade-out {
+      opacity: 0 !important;
+      pointer-events: none;
+    }
+    .fade-in {
+      opacity: 1 !important;
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0;">
+    <div style="background: #e3f0fc; min-height: 100vh; padding: 0;">
+      <div style="display:flex; align-items:center; justify-content:center; gap:24px; margin-top:24px; margin-bottom:0; flex-direction:column;">
+        <h1 style="text-align:center; font-size:2.4em; margin: 0; letter-spacing: 2px; color: #1a355e; font-weight: 700; font-family: Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif; text-transform:uppercase;">Yahtzee Scorecard</h1>
+      </div>
+      <div class="scorecard" id="player-entry" style="margin-top: 32px; margin-bottom: 32px;">
+        <h1 style="font-size:1.5em; color:#2c3e50; margin-top:0; font-family: Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif;">🎲 Yahtzee Scorecard</h1>
+        <div id="player-list"></div>
+        <p>
+          Player Name: <input type="text" id="playerName" placeholder="Enter player name" />
+          <button id="addPlayerBtn">Add Player</button>
+        </p>
+        <button id="startGameBtn" disabled>Start Game</button>
+      </div>
+      <div id="scorecard-container" style="display:none;"></div>
+    </div>
+    <script>
+    // Dynamic multi-player scorecard
+    const players = [];
+    const categories = [
+      { label: 'Ones', name: 'ones', options: ['', 'X', 1, 2, 3, 4, 5] },
+      { label: 'Twos', name: 'twos', options: ['', 'X', 2, 4, 6, 8, 10] },
+      { label: 'Threes', name: 'threes', options: ['', 'X', 3, 6, 9, 12, 15] },
+      { label: 'Fours', name: 'fours', options: ['', 'X', 4, 8, 12, 16, 20] },
+      { label: 'Fives', name: 'fives', options: ['', 'X', 5, 10, 15, 20, 25] },
+      { label: 'Sixes', name: 'sixes', options: ['', 'X', 6, 12, 18, 24, 30] },
+      { label: 'Three of a Kind', name: 'threeofakind', options: ['', 'X', ...Array.from({length:26},(_,i)=>i+5)] },
+      { label: 'Four of a Kind', name: 'fourofakind', options: ['', 'X', ...Array.from({length:26},(_,i)=>i+5)] },
+      { label: 'Full House', name: 'fullhouse', options: ['', 'X', 25] },
+      { label: 'Small Straight', name: 'smallstraight', options: ['', 'X', 30] },
+      { label: 'Large Straight', name: 'largestraight', options: ['', 'X', 40] },
+      { label: 'Yahtzee', name: 'yahtzee', options: ['', 'X', 50] },
+      { label: 'Chance', name: 'chance', options: ['', 'X', ...Array.from({length:26},(_,i)=>i+5)] },
+      { label: 'Bonus Yahtzee', name: 'bonusyahtzee', options: ['', 'X', 100, 200, 300, 400, 500] }
+    ];
+    function buildScorecard() {
+      const container = document.getElementById('scorecard-container');
+      if (players.length === 0) { container.innerHTML = ''; return; }
+      let html = '<table border="1" style="width:100%; margin-top:20px; border-collapse: collapse; text-align: left;">';
+      html += '<thead><tr><th>Player Name</th>';
+      for (const p of players) html += `<th>${p}</th>`;
+      html += '</tr></thead><tbody>';
+      // UPSTAIRS SECTION
+      html += '<tr><td colspan="'+(players.length+1)+'"><strong>UPSTAIRS</strong></td></tr>';
+      for (let i=0; i<6; ++i) {
+        html += `<tr><td>${categories[i].label}</td>`;
+        for (let j=0; j<players.length; ++j) {
+          html += `<td><select name="${categories[i].name}-p${j}" style="width:100%;height:2em;">`;
+          for (const opt of categories[i].options) html += `<option value="${opt}">${opt}</option>`;
+          html += '</select></td>';
+        }
+        html += '</tr>';
+      }
+      // Totals
+      html += '<tr><td><em>Total Score</em></td>';
+      for (let j=0; j<players.length; ++j) html += `<td><input type="number" id="upperTotal-p${j}" disabled /></td>`;
+      html += '</tr>';
+      // Add "the curve" row
+      html += '<tr><td><em>The Curve</em></td>';
+      for (let j=0; j<players.length; ++j) html += `<td id="theCurve-p${j}" style="text-align:center; font-weight:bold;"></td>`;
+      html += '</tr>';
+      html += '<tr><td><em>Bonus</em></td>';
+      for (let j=0; j<players.length; ++j) html += `<td><input type="text" id="bonusScore-p${j}" disabled /></td>`;
+      html += '</tr>';
+      html += '<tr><td><em>Upstairs Total</em></td>';
+      for (let j=0; j<players.length; ++j) html += `<td><input type="number" id="upstairsTotal-p${j}" disabled /></td>`;
+      html += '</tr>';
+      // DOWNSTAIRS SECTION
+      html += '<tr><td colspan="'+(players.length+1)+'"><strong>DOWNSTAIRS</strong></td></tr>';
+      for (let i=6; i<categories.length; ++i) {
+        html += `<tr><td>${categories[i].label}</td>`;
+        for (let j=0; j<players.length; ++j) {
+          html += `<td><select name="${categories[i].name}-p${j}" style="width:100%;height:2em;">`;
+          for (const opt of categories[i].options) html += `<option value="${opt}">${opt}</option>`;
+          html += '</select></td>';
+        }
+        html += '</tr>';
+      }
+      // Downstairs Total
+      html += '<tr><td><em>Downstairs Total</em></td>';
+      for (let j=0; j<players.length; ++j) html += `<td><input type="number" id="lowerTotal-p${j}" disabled /></td>`;
+      html += '</tr>';
+      // Grand Total
+      html += '<tr><td><strong>Grand Total</strong></td>';
+      for (let j=0; j<players.length; ++j) html += `<td><input type="number" id="grandTotal-p${j}" disabled style="font-weight:bold;" /></td>`;
+      html += '</tr>';
+      // Add Ranking row
+      html += '<tr><td><strong>Ranking</strong></td>';
+      for (let j=0; j<players.length; ++j) html += `<td id="ranking-p${j}" style="text-align:center; font-weight:bold;"></td>`;
+      html += '</tr>';
+      html += '</tbody></table>';
+      container.innerHTML = html;
+      // Add event listeners for all dropdowns
+      for (let j=0; j<players.length; ++j) {
+        // Track Yahtzee for each player
+        let yahtzee50 = false;
+        const yahtzeeSel = document.querySelector(`select[name='yahtzee-p${j}']`);
+        const bonusSel = document.querySelector(`select[name='bonusyahtzee-p${j}']`);
+        // Initially disable Bonus Yahtzee
+        if (bonusSel) bonusSel.disabled = true;
+        if (yahtzeeSel) {
+          yahtzeeSel.addEventListener('change', () => {
+            if (yahtzeeSel.value === '50') {
+              yahtzee50 = true;
+              if (bonusSel) bonusSel.disabled = false;
+            } else {
+              if (bonusSel) {
+                bonusSel.value = '';
+                bonusSel.disabled = true;
+              }
+            }
+          });
+        }
+        for (let i=0; i<6; ++i) {
+          const sel = document.querySelector(`select[name='${categories[i].name}-p${j}']`);
+          sel.addEventListener('change', ()=>{
+            if (sel.value === 'X') showBilgeNotification();
+            updateUpperTotal(j);
+            updateCurve(j);
+            checkEndGame();
+          });
+        }
+        for (let i=6; i<categories.length; ++i) {
+          const sel = document.querySelector(`select[name='${categories[i].name}-p${j}']`);
+          if (categories[i].name !== 'bonusyahtzee') {
+            sel.addEventListener('change', ()=>{
+              if (sel.value === 'X') showBilgeNotification();
+              if (categories[i].name === 'yahtzee' && sel.value === '50') showYahtzeeCelebration();
+              updateLowerTotal(j);
+              checkEndGame();
+            });
+          } else {
+            sel.addEventListener('change', ()=>{
+              if (sel.value === 'X') showBilgeNotification();
+              updateLowerTotal(j);
+              checkEndGame();
+            });
+          }
+        }
+      }
+      // Live cumulation: initialize Downstairs Total on build
+      for (let j=0; j<players.length; ++j) {
+        updateLowerTotal(j);
+        updateCurve(j);
+      }
+    }
+    function updateUpperTotal(playerIdx) {
+      // Ones to Sixes
+      let allFilled = true;
+      let values = [];
+      for (let i=0; i<6; ++i) {
+        const sel = document.querySelector(`select[name='${categories[i].name}-p${playerIdx}']`);
+        const val = sel.value;
+        if (!val) allFilled = false;
+        values.push(val === 'X' ? 0 : (parseInt(val) || 0));
+      }
+      const total = values.reduce((a,b)=>a+b,0);
+      document.getElementById(`upperTotal-p${playerIdx}`).value = total;
+      // Bonus
+      const bonus = total >= 63 ? 35 : 0;
+      const bonusInput = document.getElementById(`bonusScore-p${playerIdx}`);
+      if (bonusInput) {
+        if (bonus === 35 && bonusInput.value !== '35') showBrucieBonusNotification();
+        bonusInput.value = bonus === 0 ? '' : bonus;
+      }
+      // Upstairs Total
+      document.getElementById(`upstairsTotal-p${playerIdx}`).value = allFilled ? (total + bonus) : '';
+      updateCurve(playerIdx);
+      updateGrandTotal(playerIdx);
+    }
+    function updateCurve(playerIdx) {
+      // The curve targets for each upper section category
+      const curveTargets = [3, 6, 9, 12, 15, 18];
+      let sum = 0;
+      let curveSum = 0;
+      let filled = 0;
+      for (let i = 0; i < 6; ++i) {
+        const sel = document.querySelector(`select[name='${categories[i].name}-p${playerIdx}']`);
+        const val = sel.value;
+        if (val) {
+          // Treat 'X' as 0 for curve calculation
+          const num = (val === 'X') ? 0 : (parseInt(val) || 0);
+          sum += num;
+          curveSum += curveTargets[i];
+          filled++;
+        }
+      }
+      const cell = document.getElementById(`theCurve-p${playerIdx}`);
+      if (!cell) return;
+      if (filled === 0) {
+        cell.textContent = '';
+        cell.style.background = '';
+        cell.style.color = '';
+        return;
+      }
+      const difference = sum - curveSum;
+      if (sum < curveSum) {
+        cell.textContent = `Behind the curve (${difference})`;
+        cell.style.background = '#ffe5e5'; // pale red
+        cell.style.color = '#a94442';
+      } else if (sum === curveSum) {
+        cell.textContent = 'On the curve (0)';
+        cell.style.background = '#f7f7f7'; // neutral
+        cell.style.color = '#333';
+      } else {
+        cell.textContent = `Ahead of the curve (+${difference})`;
+        cell.style.background = '#e5ffe5'; // pale green
+        cell.style.color = '#2e7d32';
+      }
+    }
+    function updateLowerTotal(playerIdx) {
+      function getValue(catIdx) {
+        const el = document.querySelector(`select[name='${categories[catIdx].name}-p${playerIdx}']`);
+        if (!el) return 0;
+        const val = el.value;
+        if (!val || val === 'X') return 0;
+        return parseInt(val) || 0;
+      }
+      let lowerTotal = 0;
+      for (let i = 6; i < categories.length; ++i) lowerTotal += getValue(i);
+      document.getElementById(`lowerTotal-p${playerIdx}`).value = lowerTotal;
+      updateGrandTotal(playerIdx);
+    }
+    function updateGrandTotal(playerIdx) {
+      // Calculate upper section (ones to sixes)
+      let upper = 0;
+      for (let i = 0; i < 6; ++i) {
+        const sel = document.querySelector(`select[name='${categories[i].name}-p${playerIdx}']`);
+        const val = sel && sel.value;
+        upper += (val === 'X') ? 0 : (parseInt(val) || 0);
+      }
+      // Add bonus if any
+      const bonus = parseInt(document.getElementById(`bonusScore-p${playerIdx}`).value) || 0;
+      // Calculate downstairs section (categories 6 and up)
+      let lower = 0;
+      for (let i = 6; i < categories.length; ++i) {
+        const sel = document.querySelector(`select[name='${categories[i].name}-p${playerIdx}']`);
+        const val = sel && sel.value;
+        lower += (val === 'X') ? 0 : (parseInt(val) || 0);
+      }
+      const grand = upper + bonus + lower;
+      // Show blank if nothing entered, else show total
+      document.getElementById(`grandTotal-p${playerIdx}`).value = (upper || bonus || lower) ? grand : '';
+      updateRanking();
+    }
+    function updateRanking() {
+      // Gather all grand totals
+      const scores = [];
+      for (let j = 0; j < players.length; ++j) {
+        const val = parseInt(document.getElementById(`grandTotal-p${j}`).value) || 0;
+        scores.push({ idx: j, score: val });
+      }
+      // Sort descending, keep track of original index
+      const sorted = [...scores].sort((a, b) => b.score - a.score);
+      // Assign ranks (handle ties)
+      let lastScore = null, lastRank = 0, skip = 0;
+      const ranks = Array(players.length);
+      for (let i = 0; i < sorted.length; ++i) {
+        if (sorted[i].score === lastScore) {
+          skip++;
+          ranks[sorted[i].idx] = ordinal(lastRank);
+        } else {
+          lastRank = i + 1;
+          ranks[sorted[i].idx] = ordinal(lastRank);
+          lastScore = sorted[i].score;
+          skip = 0;
+        }
+      }
+      // Update DOM
+      for (let j = 0; j < players.length; ++j) {
+        const cell = document.getElementById(`ranking-p${j}`);
+        if (cell) cell.textContent = (scores[j].score > 0) ? ranks[j] : '';
+      }
+      function ordinal(n) {
+        if (n === 11 || n === 12 || n === 13) return n + 'th';
+        const last = n % 10;
+        if (last === 1) return n + 'st';
+        if (last === 2) return n + 'nd';
+        if (last === 3) return n + 'rd';
+        return n + 'th';
+      }
+    }
+    function updatePlayerList() {
+      const listDiv = document.getElementById('player-list');
+      if (players.length === 0) {
+        listDiv.innerHTML = '<em>No players added yet.</em>';
+        document.getElementById('startGameBtn').disabled = true;
+      } else {
+        listDiv.innerHTML = '<strong>Players:</strong> ' + players.map(p => `<span style=\"margin-right:1em;\">${p}</span>`).join('');
+        document.getElementById('startGameBtn').disabled = false;
+      }
+    }
+    // Notification popup for 'That's bilge!'
+    function showBilgeNotification() {
+      if (document.getElementById('bilge-popup')) return; // Prevent stacking
+      const popup = document.createElement('div');
+      popup.id = 'bilge-popup';
+      popup.textContent = "That's bilge!";
+      popup.style.position = 'fixed';
+      popup.style.top = '50%';
+      popup.style.left = '50%';
+      popup.style.transform = 'translate(-50%, -50%)';
+      popup.style.background = '#ffe5b4'; // pale orange
+      popup.style.color = '#1a355e';
+      popup.style.padding = '32px 48px';
+      popup.style.fontSize = '2em';
+      popup.style.fontWeight = '400'; // not bold
+      popup.style.borderRadius = '18px';
+      popup.style.boxShadow = '0 6px 32px rgba(30,60,120,0.18)';
+      popup.style.zIndex = 9999;
+      popup.style.textAlign = 'center';
+      popup.style.letterSpacing = '2px';
+      popup.style.fontFamily = "Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif";
+      document.body.appendChild(popup);
+      setTimeout(() => {
+        popup.style.transition = 'opacity 0.5s';
+        popup.style.opacity = 0;
+        setTimeout(() => popup.remove(), 500);
+      }, 1400);
+    }
+    // Notification popup for 'Brucie Bonus!'
+    function showBrucieBonusNotification() {
+      if (document.getElementById('brucie-bonus-popup')) return;
+      const popup = document.createElement('div');
+      popup.id = 'brucie-bonus-popup';
+      popup.textContent = "Brucie Bonus!";
+      popup.style.position = 'fixed';
+      popup.style.top = '32px';
+      popup.style.left = '50%';
+      popup.style.transform = 'translateX(-50%)';
+      popup.style.background = '#d6f9d6'; // pale green
+      popup.style.color = '#1a355e';
+      popup.style.padding = '22px 40px';
+      popup.style.fontSize = '1.5em';
+      popup.style.fontWeight = '500';
+      popup.style.borderRadius = '14px';
+      popup.style.boxShadow = '0 4px 24px rgba(30,60,120,0.13)';
+      popup.style.zIndex = '9999';
+      popup.style.letterSpacing = '1px';
+      popup.style.textAlign = 'center';
+      popup.style.fontFamily = "Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif";
+      document.body.appendChild(popup);
+      setTimeout(()=>{
+        popup.style.transition = 'opacity 0.5s';
+        popup.style.opacity = '0';
+        setTimeout(()=>popup.remove(), 500);
+      }, 1600);
+    }
+    function showYahtzeeCelebration() {
+      if (document.getElementById('yahtzee-celebration')) return;
+      // Celebration popup
+      const popup = document.createElement('div');
+      popup.id = 'yahtzee-celebration';
+      popup.textContent = 'YAHTZEE! 🎉';
+      popup.style.position = 'fixed';
+      popup.style.top = '50%';
+      popup.style.left = '50%';
+      popup.style.transform = 'translate(-50%, -50%)';
+      popup.style.background = '#ffe6f2'; // pale pink
+      popup.style.color = '#e67e22';
+      popup.style.padding = '36px 60px';
+      popup.style.fontSize = '2.2em';
+      popup.style.fontWeight = '600';
+      popup.style.borderRadius = '22px';
+      popup.style.boxShadow = '0 8px 40px rgba(230,126,34,0.18)';
+      popup.style.zIndex = 10000;
+      popup.style.textAlign = 'center';
+      popup.style.letterSpacing = '2px';
+      popup.style.fontFamily = "Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif";
+      document.body.appendChild(popup);
+      // Confetti animation
+      for (let i = 0; i < 60; i++) {
+        const conf = document.createElement('div');
+        conf.className = 'confetti';
+        conf.style.position = 'fixed';
+        conf.style.left = Math.random() * 100 + 'vw';
+        conf.style.top = '-40px';
+        conf.style.width = '12px';
+        conf.style.height = '18px';
+        conf.style.background = `hsl(${Math.random()*360},90%,70%)`;
+        conf.style.opacity = 0.85;
+        conf.style.borderRadius = '3px';
+        conf.style.transform = `rotate(${Math.random()*360}deg)`;
+        conf.style.zIndex = 10001;
+        // Make confetti fall even more slowly (3s)
+        conf.style.transition = 'top 3s cubic-bezier(.4,1.4,.6,1), left 3s linear, opacity 0.9s';
+        document.body.appendChild(conf);
+        setTimeout(() => {
+          conf.style.top = 80 + 20 * Math.random() + 'vh';
+          conf.style.left = (parseFloat(conf.style.left) + (Math.random()-0.5)*200) + 'px';
+          conf.style.opacity = 0.2 + Math.random()*0.3;
+        }, 30);
+        setTimeout(() => conf.remove(), 3500);
+      }
+      // Let the notification last longer
+      setTimeout(() => {
+        popup.style.transition = 'opacity 0.7s';
+        popup.style.opacity = 0;
+        setTimeout(() => popup.remove(), 700);
+      }, 3100);
+    }
+    document.getElementById('addPlayerBtn').onclick = function() {
+      const name = document.getElementById('playerName').value.trim();
+      if (!name) return;
+      if (players.includes(name)) return;
+      players.push(name);
+      document.getElementById('playerName').value = '';
+      updatePlayerList();
+    };
+    document.getElementById('startGameBtn').onclick = function() {
+      if (players.length === 0) return;
+      const entry = document.getElementById('player-entry');
+      const scorecard = document.getElementById('scorecard-container');
+      entry.classList.add('fade');
+      entry.classList.add('fade-out');
+      setTimeout(() => {
+        entry.style.display = 'none';
+        scorecard.style.display = '';
+        scorecard.classList.add('fade', 'fade-in');
+        buildScorecard();
+        setTimeout(() => scorecard.classList.remove('fade-in'), 600);
+      }, 500);
+    };
+    // On load, show player entry and update list
+    window.onload = function() {
+      updatePlayerList();
+    };
+    function checkEndGame() {
+      // Check if all players have 13 filled (non-empty) scores
+      let allDone = true;
+      for (let j=0; j<players.length; ++j) {
+        let filled = 0;
+        for (let i=0; i<categories.length; ++i) {
+          const sel = document.querySelector(`select[name='${categories[i].name}-p${j}']`);
+          if (sel && sel.value && sel.value !== '') filled++;
+        }
+        if (filled < 13) { allDone = false; break; }
+      }
+      if (allDone) endGame();
+    }
+    function endGame() {
+      // Disable all dropdowns
+      const selects = document.querySelectorAll('select');
+      selects.forEach(sel => sel.disabled = true);
+      // Show summary page
+      showSummaryPage();
+    }
+    function showSummaryPage() {
+      // Hide scorecard, show summary
+      const scorecard = document.getElementById('scorecard-container');
+      scorecard.classList.add('fade');
+      scorecard.classList.add('fade-out');
+      setTimeout(() => {
+        scorecard.style.display = 'none';
+        // Remove the main heading if present
+        const mainHeading = document.querySelector('h1');
+        if (mainHeading) mainHeading.style.display = 'none';
+        const summaryDiv = document.createElement('div');
+        summaryDiv.id = 'summary-page';
+        summaryDiv.className = 'fade fade-in';
+        summaryDiv.style.background = '#fff';
+        summaryDiv.style.maxWidth = '400px';
+        summaryDiv.style.position = 'fixed';
+        summaryDiv.style.top = '1cm'; // 1cm from the top
+        summaryDiv.style.left = '50%'; // Center horizontally
+        summaryDiv.style.transform = 'translate(-50%, 0)'; // Center horizontally only
+        summaryDiv.style.zIndex = '10002';
+        summaryDiv.style.padding = '36px 32px';
+        summaryDiv.style.borderRadius = '18px';
+        summaryDiv.style.boxShadow = '0 4px 24px rgba(30,60,120,0.10)';
+        summaryDiv.style.textAlign = 'center';
+        summaryDiv.style.fontFamily = "Optima, 'Segoe', 'Segoe UI', 'Candara', 'Calibri', 'Arial', sans-serif";
+        let html = '<h2 style="color:#1a355e; font-size:1.7em; margin-bottom:0.5em;">Game Over!</h2>';
+        html += '<h3 style="color:#1a355e; font-size:1.1em;">Final Scores</h3>';
+        html += '<table style="margin:0 auto 1.2em auto; font-size:1em; border-collapse:collapse; min-width:180px; max-width:220px; width:70%;"><tr><th style="padding:6px 10px; background:#d0e6fa; color:#1a355e; font-size:1em;">Player</th><th style="padding:6px 10px; background:#d0e6fa; color:#1a355e; font-size:1em;">Score</th></tr>';
+        let maxScore = -Infinity, winner = '';
+        const scores = [];
+        for (let j=0; j<players.length; ++j) {
+          const score = parseInt(document.getElementById(`grandTotal-p${j}`).value) || 0;
+          scores.push({ name: players[j], score });
+          if (score > maxScore) { maxScore = score; winner = players[j]; }
+        }
+        for (const { name, score } of scores) {
+          html += `<tr><td style="padding:6px 10px; border-top:1px solid #eaf4fd; color:#1a355e;">${name}</td><td style="padding:6px 10px; border-top:1px solid #eaf4fd; color:#1a355e;">${score}</td></tr>`;
+        }
+        html += '</table>';
+        html += `<h3 style="color:#1a355e; font-size:1.2em;">Congratulations, ${winner}!</h3>`;
+        html += '<button id="restartGameBtn" style="padding:8px 18px; font-size:1em; background:#4a90e2; color:white; border:none; border-radius:6px; cursor:pointer; margin:10px 8px 0 8px;">Play Again</button>';
+        html += '<button id="reviewScoresBtn" style="padding:8px 18px; font-size:1em; background:#eaf4fd; color:#1a355e; border:none; border-radius:6px; cursor:pointer; margin:10px 8px 0 8px;">Review Scoresheet</button>';
+        summaryDiv.innerHTML = html;
+        document.body.appendChild(summaryDiv);
+        setTimeout(() => summaryDiv.classList.remove('fade-in'), 600);
+        document.getElementById('restartGameBtn').onclick = function() {
+          location.reload();
+        };
+        document.getElementById('reviewScoresBtn').onclick = function() {
+          summaryDiv.classList.add('fade-out');
+          setTimeout(() => {
+            summaryDiv.remove();
+            scorecard.style.display = '';
+            scorecard.classList.remove('fade-out', 'fade', 'fade-in');
+            scorecard.style.opacity = '1';
+            scorecard.style.pointerEvents = 'auto';
+            // Restore the main heading
+            const mainHeading = document.querySelector('h1');
+            if (mainHeading) mainHeading.style.display = '';
+          }, 500);
+        };
+      }, 500);
+    }
+    </script>
+</body>
+</body>
